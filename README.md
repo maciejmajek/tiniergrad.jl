@@ -1,5 +1,5 @@
 # tiniergrad.jl
-### There are many deep learning fremworks available for you to use. Need a mid sized CNN for binary classification?- Sure. Go for PyTorch. Need a huge gpt4 sized llvm? Again, go for PyTorch. This is clerealy the best way! Or is it?
+### There are many deep learning fremworks available for you to use. Need a mid sized CNN for binary classification?- Sure. Go for PyTorch. Need a huge gpt4 sized llvm? Again, go for PyTorch. This is clearly the best way! Or is it?
 ![image](https://drive.google.com/uc?export=view&id=1ut_D_8aPNgm8hcZQbsAO_mKMO4zsEQv8)
 # The choice.
 ### Does it matter whether one use Tensorflow, Pytorch, Jax or Flux.jl? Well, it **does**. In fact there are many differences!
@@ -11,7 +11,7 @@
 # Do I?
 ## **tiniergrad.jl** is merely a proof of concept.- The concept being a **deep** understanding of even **deeper** principles of **deep** learning math.
 
-### Hoping that one day those julia linesmight help an innocent soul grasp the math behind mlp and cnn operations!
+### Hoping that one day those julia lines might help an innocent soul grasp the math behind mlp and cnn operations!
 
 # If your head already hurts
 ## Here is a meme for you
