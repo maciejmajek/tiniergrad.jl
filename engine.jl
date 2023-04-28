@@ -3,17 +3,17 @@ using BenchmarkTools
 abstract type GraphNode end
 abstract type Operator <: GraphNode end
 
-struct Constant{T} <: GraphNode
-    output::T
+struct Constant <: GraphNode
+    output::Union{Int64,Float64,Array{Float64,N} where N}
 end
 
 mutable struct Variable <: GraphNode
-    output::Any
-    gradient::Any
+    output::Array{Float64,N} where {N}
+    gradient::Array{Float64,N} where {N}
     name::String
     requires_grad::Bool
     Variable(output; name = "?", requires_grad = true) =
-        new(output, nothing, name, requires_grad)
+        new(output, zeros(size(output)), name, requires_grad)
 end
 
 mutable struct ScalarOperator{F} <: Operator
@@ -75,7 +75,7 @@ function topological_sort(head::GraphNode)
 end
 
 reset!(node::Constant) = nothing
-reset!(node::Variable) = node.gradient = nothing
+reset!(node::Variable) = node.gradient .= zero(node.gradient)
 reset!(node::Operator) = node.gradient = nothing
 
 compute!(node::Constant) = nothing
