@@ -73,7 +73,8 @@ backward(::BroadcastedOperator{typeof(max)}, x, y, g) =
 sigmoid(x::GraphNode) = BroadcastedOperator(sigmoid, x)
 forward(::BroadcastedOperator{typeof(sigmoid)}, x) = 1 ./ (1 .+ exp.(-x))
 backward(node::BroadcastedOperator{typeof(sigmoid)}, x, g) =
-    tuple(g .* exp.(x) ./ (1 .+ exp.(x)) .^ 2)
+    tuple(g .* node.output .* (1 .- node.output))
+
 
 relu(x::GraphNode) = BroadcastedOperator(relu, x)
 forward(::BroadcastedOperator{typeof(relu)}, x) = return max.(x, zero(x))
@@ -83,13 +84,14 @@ cross_entropy_loss(y_hat::GraphNode, y::GraphNode) =
     BroadcastedOperator(cross_entropy_loss, y_hat, y)
 forward(::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y) =
     let
+        y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
         loss = sum(log.(y_hat) .* y) * -1.0
         return loss
     end
 backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y, g) =
     let
-
+        y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
         return tuple(g .* (y_hat - y) / node.output)
     end
@@ -179,17 +181,15 @@ backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
 
 import Base.reshape
 reshape(x::GraphNode, new_size::GraphNode) = BroadcastedOperator(reshape, x, new_size)
-forward(::BroadcastedOperator{typeof(reshape)}, x, new_size) =
-    let
-        x = reshape(x, new_size)
-        return x
-    end
-backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) =
-    let
-        g = reshape(g, size(x))
-        return tuple(g)
-    end
+forward(::BroadcastedOperator{typeof(reshape)}, x, new_size) = reshape(x, new_size)
+backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) = tuple(reshape(g, size(x)))
 
-function create_kernel(n_input::Int64, n_output::Int64; kernel_size = 3)
-    return rand(kernel_size, kernel_size, n_input, n_output)
-end
+function flatten() end
+flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
+forward(::BroadcastedOperator{typeof(flatten)}, x) = reshape(x, length(x))
+backward(::BroadcastedOperator{typeof(flatten)}, x, g) = tuple(reshape(g, size(x)))
+
+function dense() end
+dense(x::GraphNode, w::GraphNode, b::GraphNode) = BroadcastedOperator(dense, x, w, b)
+forward(::BroadcastedOperator{typeof(dense)}, x, w, b) = w * x .+ b
+backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = tuple(g * x', w' * g, g)
