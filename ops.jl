@@ -192,4 +192,4 @@ backward(::BroadcastedOperator{typeof(flatten)}, x, g) = tuple(reshape(g, size(x
 function dense() end
 dense(x::GraphNode, w::GraphNode, b::GraphNode) = BroadcastedOperator(dense, x, w, b)
 forward(::BroadcastedOperator{typeof(dense)}, x, w, b) = w * x .+ b
-backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = tuple(g * x', w' * g, g)
+backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = tuple(w' * g, g * x', g)
