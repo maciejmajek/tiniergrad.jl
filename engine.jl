@@ -12,8 +12,9 @@ mutable struct Variable <: GraphNode
     gradient::Array{Float64,N} where {N}
     name::String
     requires_grad::Bool
+    data::Any
     Variable(output; name = "?", requires_grad = true) =
-        new(output, zeros(size(output)), name, requires_grad)
+        new(output, zeros(size(output)), name, requires_grad, nothing)
 end
 
 mutable struct ScalarOperator{F} <: Operator
@@ -21,8 +22,9 @@ mutable struct ScalarOperator{F} <: Operator
     output::Any
     gradient::Any
     name::String
+    data::Any
     ScalarOperator(fun, inputs...; name = "?") =
-        new{typeof(fun)}(inputs, nothing, nothing, name)
+        new{typeof(fun)}(inputs, nothing, nothing, name, nothing)
 end
 
 mutable struct BroadcastedOperator{F} <: Operator
@@ -30,8 +32,9 @@ mutable struct BroadcastedOperator{F} <: Operator
     output::Any
     gradient::Any
     name::String
+    data::Any
     BroadcastedOperator(fun, inputs...; name = "?") =
-        new{typeof(fun)}(inputs, nothing, nothing, name)
+        new{typeof(fun)}(inputs, nothing, nothing, name, nothing)
 end
 
 import Base: show, summary
