@@ -153,30 +153,19 @@ add_dim(x::Array) = reshape(x, (size(x)..., 1))
 conv2d(x::GraphNode, kernel::GraphNode) = BroadcastedOperator(conv2d, x, kernel)
 forward(::BroadcastedOperator{typeof(conv2d)}, x, kernel) =
     let
-        x = add_dim(x)
-        output = conv_op(x, kernel, flipped = false)[:, :, :, 1]
+        input = @view x[:,:,:,1:1]
+        output = @view conv_op(input, kernel, flipped = false)[:, :, :, 1]
         return output
     end
 
 backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
     let
         x = add_dim(x)
-        kernels_gradient = zeros(size(kernel))
-        input_gradient = zeros(size(x))
-        g = add_dim(g)
-        for i = 1:size(kernel, 4)
-            for j = 1:size(kernel, 3)
-                kernels_gradient[:, :, j, i] =
-                    conv_op(add_dim(x[:, :, j, :]), add_dim(g[:, :, i, :]), flipped = true)
-                input_gradient[:, :, j, :] = conv_op(
-                    add_dim(g[:, :, i, :]),
-                    add_dim(add_dim(kernel[:, :, j, i])),
-                    pad = 2,
-                    flipped = false,
-                )
-            end
-        end
-        return tuple(input_gradient, kernels_gradient)
+        if size(g)[end] != 1 g = add_dim(g) end
+
+        kernel_gradient = permutedims(conv_op(permutedims(x, (1, 2, 4, 3)), permutedims(g, (1, 2, 4, 3)), flipped=true), (1, 2, 4, 3))
+        input_gradient = conv_op(g, permutedims(kernel, (1, 2, 4, 3)), pad=2, flipped=false)
+        return tuple(input_gradient, kernel_gradient)
     end
 
 import Base.reshape
