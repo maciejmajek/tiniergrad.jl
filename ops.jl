@@ -117,7 +117,7 @@ backward(node::BroadcastedOperator{typeof(softmax)}, x, g) =
 import NNlib
 
 
-function conv(x, kernel; pad = 0, flipped = false)
+function conv(x, kernel; pad=0, flipped=false)
     h, w, c = size(x)
     kh, kw, kc, kb = size(kernel)
 
@@ -153,15 +153,17 @@ add_dim(x::Array) = reshape(x, (size(x)..., 1))
 conv2d(x::GraphNode, kernel::GraphNode) = BroadcastedOperator(conv2d, x, kernel)
 forward(::BroadcastedOperator{typeof(conv2d)}, x, kernel) =
     let
-        input = @view x[:,:,:,1:1]
-        output = @view conv_op(input, kernel, flipped = false)[:, :, :, 1]
+        input = @view x[:, :, :, 1:1]
+        output = @view conv_op(input, kernel, flipped=false)[:, :, :, 1]
         return output
     end
 
 backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
     let
         x = add_dim(x)
-        if size(g)[end] != 1 g = add_dim(g) end
+        if size(g)[end] != 1
+            g = add_dim(g)
+        end
 
         kernel_gradient = permutedims(conv_op(permutedims(x, (1, 2, 4, 3)), permutedims(g, (1, 2, 4, 3)), flipped=true), (1, 2, 4, 3))
         input_gradient = conv_op(g, permutedims(kernel, (1, 2, 4, 3)), pad=2, flipped=false)
@@ -182,3 +184,32 @@ function dense() end
 dense(x::GraphNode, w::GraphNode, b::GraphNode) = BroadcastedOperator(dense, x, w, b)
 forward(::BroadcastedOperator{typeof(dense)}, x, w, b) = w * x .+ b
 backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = tuple(w' * g, g * x', g)
+
+function maxpool2d() end
+maxpool2d(x::GraphNode) = BroadcastedOperator(maxpool2d, x)
+forward(node::BroadcastedOperator{typeof(maxpool2d)}, x) =
+    let
+        h, w, c = size(x)
+        output = zeros(h ÷ 2, w ÷ 2, c)
+        indices = CartesianIndex{3}[]
+        for i in 1:c
+            for j in 1:h÷2
+                for k in 1:w÷2
+                    val, ids = findmax(@view x[2*j-1:2*j, 2*k-1:2*k, i])
+                    output[j, k, i] = val
+
+                    idx, idy = ids[1] + 2 * j - 1 - 1, ids[2] + 2 * k - 1 - 1
+                    push!(indices, CartesianIndex(idx, idy, i))
+                end
+            end
+        end
+        node.data = indices
+        output
+    end
+
+backward(node::BroadcastedOperator{typeof(maxpool2d)}, x, g) =
+    let
+        output = zeros(size(x))
+        output[node.data] = vcat(g...)
+        tuple(output)
+    end
