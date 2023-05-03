@@ -93,7 +93,7 @@ backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y, g) =
     let
         y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
-        return tuple(g .* (y_hat - y) / node.output)
+        return tuple(g .* (y_hat - y))
     end
 
 Base.Broadcast.broadcasted(^, x::GraphNode, y::GraphNode) = BroadcastedOperator(^, x, y)
@@ -154,7 +154,7 @@ conv2d(x::GraphNode, kernel::GraphNode) = BroadcastedOperator(conv2d, x, kernel)
 forward(::BroadcastedOperator{typeof(conv2d)}, x, kernel) =
     let
         input = @view x[:, :, :, 1:1]
-        output = @view conv_op(input, kernel, flipped=false)[:, :, :, 1]
+        output = @view conv_op(input, kernel, flipped=true)[:, :, :, 1]
         return output
     end
 
@@ -164,7 +164,7 @@ backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
         if size(g)[end] != 1
             g = add_dim(g)
         end
-
+ 
         kernel_gradient = permutedims(conv_op(permutedims(x, (1, 2, 4, 3)), permutedims(g, (1, 2, 4, 3)), flipped=true), (1, 2, 4, 3))
         input_gradient = conv_op(g, permutedims(kernel, (1, 2, 4, 3)), pad=2, flipped=false)
         return tuple(input_gradient, kernel_gradient)
@@ -203,13 +203,13 @@ forward(node::BroadcastedOperator{typeof(maxpool2d)}, x) =
                 end
             end
         end
-        node.data = indices
+        node.cache = indices
         output
     end
 
 backward(node::BroadcastedOperator{typeof(maxpool2d)}, x, g) =
     let
         output = zeros(size(x))
-        output[node.data] = vcat(g...)
+        output[node.cache] = vcat(g...)
         tuple(output)
     end
