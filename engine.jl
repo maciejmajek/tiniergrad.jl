@@ -10,11 +10,12 @@ end
 mutable struct Variable <: GraphNode
     output::Array{Float64,N} where {N}
     gradient::Array{Float64,N} where {N}
+    _gradient::Array{Float64, N} where {N}
     name::String
     requires_grad::Bool
-    data::Any
+    cache::Any
     Variable(output; name = "?", requires_grad = true) =
-        new(output, zeros(size(output)), name, requires_grad, nothing)
+        new(output, zeros(size(output)), zeros(size(output)), name, requires_grad, nothing)
 end
 
 mutable struct ScalarOperator{F} <: Operator
@@ -22,7 +23,7 @@ mutable struct ScalarOperator{F} <: Operator
     output::Any
     gradient::Any
     name::String
-    data::Any
+    cache::Any
     ScalarOperator(fun, inputs...; name = "?") =
         new{typeof(fun)}(inputs, nothing, nothing, name, nothing)
 end
@@ -32,7 +33,7 @@ mutable struct BroadcastedOperator{F} <: Operator
     output::Any
     gradient::Any
     name::String
-    data::Any
+    cache::Any
     BroadcastedOperator(fun, inputs...; name = "?") =
         new{typeof(fun)}(inputs, nothing, nothing, name, nothing)
 end
@@ -100,16 +101,16 @@ function forward!(order::Vector)
 end
 
 update!(node::Constant, gradient) = nothing
-update!(node::GraphNode, gradient) =
-    if isnothing(node.gradient)
-        node.gradient = gradient
-    else
-        node.gradient .+= gradient
+update!(node::GraphNode, gradient) = let
+    node.gradient = gradient
+    if typeof(node) == Variable
+        node._gradient += gradient
     end
+end
 
 function backward!(order::Vector; seed = 1.0)
     result = last(order)
-    result.gradient = last(order).output
+    result.gradient = seed
     @assert length(result.output) == 1 "Gradient is defined only for scalar functions"
     for node in reverse(order)
         backward!(node)
@@ -139,10 +140,12 @@ function backward!(node::Operator)
 end
 
 
-function step!(graph::Vector, lr::Float64)
+function step!(graph::Vector, lr::Float64, batch_size::Int64)
     for node in graph
         if isa(node, Variable) && node.requires_grad
-            node.output -= lr * node.gradient
+            node._gradient ./= batch_size
+            node.output -= lr * node._gradient
+            node._gradient .= 0
         end
     end
 end
