@@ -73,7 +73,8 @@ backward(::BroadcastedOperator{typeof(max)}, x, y, g) =
 sigmoid(x::GraphNode) = BroadcastedOperator(sigmoid, x)
 forward(::BroadcastedOperator{typeof(sigmoid)}, x) = 1 ./ (1 .+ exp.(-x))
 backward(node::BroadcastedOperator{typeof(sigmoid)}, x, g) =
-    tuple(g .* exp.(x) ./ (1 .+ exp.(x)) .^ 2)
+    tuple(g .* node.output .* (1 .- node.output))
+
 
 relu(x::GraphNode) = BroadcastedOperator(relu, x)
 forward(::BroadcastedOperator{typeof(relu)}, x) = return max.(x, zero(x))
@@ -83,15 +84,16 @@ cross_entropy_loss(y_hat::GraphNode, y::GraphNode) =
     BroadcastedOperator(cross_entropy_loss, y_hat, y)
 forward(::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y) =
     let
+        y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
         loss = sum(log.(y_hat) .* y) * -1.0
         return loss
     end
 backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y, g) =
     let
-
+        y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
-        return tuple(g .* (y_hat - y) / node.output)
+        return tuple(g .* (y_hat - y))
     end
 
 Base.Broadcast.broadcasted(^, x::GraphNode, y::GraphNode) = BroadcastedOperator(^, x, y)
@@ -115,7 +117,7 @@ backward(node::BroadcastedOperator{typeof(softmax)}, x, g) =
 import NNlib
 
 
-function conv(x, kernel; pad = 0, flipped = false)
+function conv(x, kernel; pad=0, flipped=false)
     h, w, c = size(x)
     kh, kw, kc, kb = size(kernel)
 
@@ -151,45 +153,63 @@ add_dim(x::Array) = reshape(x, (size(x)..., 1))
 conv2d(x::GraphNode, kernel::GraphNode) = BroadcastedOperator(conv2d, x, kernel)
 forward(::BroadcastedOperator{typeof(conv2d)}, x, kernel) =
     let
-        x = add_dim(x)
-        output = conv_op(x, kernel, flipped = false)[:, :, :, 1]
+        input = @view x[:, :, :, 1:1]
+        output = @view conv_op(input, kernel, flipped=true)[:, :, :, 1]
         return output
     end
 
 backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
     let
         x = add_dim(x)
-        kernels_gradient = zeros(size(kernel))
-        input_gradient = zeros(size(x))
-        g = add_dim(g)
-        for i = 1:size(kernel, 4)
-            for j = 1:size(kernel, 3)
-                kernels_gradient[:, :, j, i] =
-                    conv_op(add_dim(x[:, :, j, :]), add_dim(g[:, :, i, :]), flipped = true)
-                input_gradient[:, :, j, :] = conv_op(
-                    add_dim(g[:, :, i, :]),
-                    add_dim(add_dim(kernel[:, :, j, i])),
-                    pad = 2,
-                    flipped = false,
-                )
-            end
+        if size(g)[end] != 1
+            g = add_dim(g)
         end
-        return tuple(input_gradient, kernels_gradient)
+ 
+        kernel_gradient = permutedims(conv_op(permutedims(x, (1, 2, 4, 3)), permutedims(g, (1, 2, 4, 3)), flipped=true), (1, 2, 4, 3))
+        input_gradient = conv_op(g, permutedims(kernel, (1, 2, 4, 3)), pad=2, flipped=false)
+        return tuple(input_gradient, kernel_gradient)
     end
 
 import Base.reshape
 reshape(x::GraphNode, new_size::GraphNode) = BroadcastedOperator(reshape, x, new_size)
-forward(::BroadcastedOperator{typeof(reshape)}, x, new_size) =
+forward(::BroadcastedOperator{typeof(reshape)}, x, new_size) = reshape(x, new_size)
+backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) = tuple(reshape(g, size(x)))
+
+function flatten() end
+flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
+forward(::BroadcastedOperator{typeof(flatten)}, x) = reshape(x, length(x))
+backward(::BroadcastedOperator{typeof(flatten)}, x, g) = tuple(reshape(g, size(x)))
+
+function dense() end
+dense(x::GraphNode, w::GraphNode, b::GraphNode) = BroadcastedOperator(dense, x, w, b)
+forward(::BroadcastedOperator{typeof(dense)}, x, w, b) = w * x .+ b
+backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = tuple(w' * g, g * x', g)
+
+function maxpool2d() end
+maxpool2d(x::GraphNode) = BroadcastedOperator(maxpool2d, x)
+forward(node::BroadcastedOperator{typeof(maxpool2d)}, x) =
     let
-        x = reshape(x, new_size)
-        return x
-    end
-backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) =
-    let
-        g = reshape(g, size(x))
-        return tuple(g)
+        h, w, c = size(x)
+        output = zeros(h ÷ 2, w ÷ 2, c)
+        indices = CartesianIndex{3}[]
+        for i in 1:c
+            for j in 1:h÷2
+                for k in 1:w÷2
+                    val, ids = findmax(@view x[2*j-1:2*j, 2*k-1:2*k, i])
+                    output[j, k, i] = val
+
+                    idx, idy = ids[1] + 2 * j - 1 - 1, ids[2] + 2 * k - 1 - 1
+                    push!(indices, CartesianIndex(idx, idy, i))
+                end
+            end
+        end
+        node.cache = indices
+        output
     end
 
-function create_kernel(n_input::Int64, n_output::Int64; kernel_size = 3)
-    return rand(kernel_size, kernel_size, n_input, n_output)
-end
+backward(node::BroadcastedOperator{typeof(maxpool2d)}, x, g) =
+    let
+        output = zeros(size(x))
+        output[node.cache] = vcat(g...)
+        tuple(output)
+    end
