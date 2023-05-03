@@ -24,8 +24,7 @@ function cnn_train_epoch(
         graph = CNN(x, y, k1, k2, k3, k4, w1, b1, w2, b2)
         epoch_loss += train_step!(graph)
         if i % batch_size == 0
-            step!(graph, lr/batch_size)
-            zero_grad!(graph)
+            step!(graph, lr, batch_size)
         end
         set_description(iter, string(@sprintf("Train Loss: %.3f", epoch_loss / i)))
     end
@@ -40,7 +39,6 @@ function cnn_test_epoch(testx::Array{Float64,3}, testy::Array{Float64,2})
         y = Constant(testy[i, :])
         graph = CNN(x, y, k1, k2, k3, k4, w1, b1, w2, b2)
         epoch_loss += test_step(graph)
-        zero_grad!(graph)
         set_description(iter, string(@sprintf("Test Loss: %.3f", epoch_loss / i)))
     end
     return epoch_loss / size(testx, 3)
@@ -74,7 +72,7 @@ function CNN(
     z1 = conv2d(x, k1) |> relu
     z2 = conv2d(z1, k2) |> maxpool2d |> relu
     z3 = conv2d(z2, k3) |> maxpool2d |> relu
-    z4 = conv2d(z3, k4) |> maxpool2d |> flatten
+    z4 = conv2d(z3, k4) |> maxpool2d |> relu |> flatten
     z5 = dense(z4, w1, b1) |> relu
     z6 = dense(z5, w2, b2)
 
@@ -99,7 +97,7 @@ b1 = Variable(initialize_uniform_bias(64, 128));
 b2 = Variable(initialize_uniform_bias(128, 10));
 
 
-for j = 1:5
+for j = 1:10
     println("Epoch $j")
     perm = randperm(60_000)
     push!(
@@ -107,7 +105,7 @@ for j = 1:5
         cnn_train_epoch(
             train_x[:, :, perm],
             train_y[perm, :],
-            lr = 4e-3/j,
+            lr = 16e-3,
             batch_size = 16,
         ),
     )
