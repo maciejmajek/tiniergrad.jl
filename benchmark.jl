@@ -42,7 +42,7 @@ b1 = Variable(initialize_uniform_bias(64, 128));
 b2 = Variable(initialize_uniform_bias(128, 10));
 
 function test()
-    x = Constant(rand(28,28,1))
+    x = Constant(rand(28, 28, 1))
     y = Constant(rand(10))
     graph = CNN(x, y, k1, k2, k3, k4, w1, b1, w2, b2)
     forward!(graph)

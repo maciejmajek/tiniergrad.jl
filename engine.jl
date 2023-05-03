@@ -10,7 +10,7 @@ end
 mutable struct Variable <: GraphNode
     output::Array{Float64,N} where {N}
     gradient::Array{Float64,N} where {N}
-    _gradient::Array{Float64, N} where {N}
+    _gradient::Array{Float64,N} where {N}
     name::String
     requires_grad::Bool
     cache::Any
@@ -101,12 +101,13 @@ function forward!(order::Vector)
 end
 
 update!(node::Constant, gradient) = nothing
-update!(node::GraphNode, gradient) = let
-    node.gradient = gradient
-    if typeof(node) == Variable
-        node._gradient += gradient
+update!(node::GraphNode, gradient) =
+    let
+        node.gradient = gradient
+        if typeof(node) == Variable
+            node._gradient += gradient
+        end
     end
-end
 
 function backward!(order::Vector; seed = 1.0)
     result = last(order)

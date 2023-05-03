@@ -102,12 +102,7 @@ for j = 1:10
     perm = randperm(60_000)
     push!(
         train_loss,
-        cnn_train_epoch(
-            train_x[:, :, perm],
-            train_y[perm, :],
-            lr = 16e-3,
-            batch_size = 16,
-        ),
+        cnn_train_epoch(train_x[:, :, perm], train_y[perm, :], lr = 16e-3, batch_size = 16),
     )
     push!(test_loss, cnn_test_epoch(test_x, test_y))
     println()

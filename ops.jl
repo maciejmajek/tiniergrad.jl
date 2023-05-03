@@ -117,7 +117,7 @@ backward(node::BroadcastedOperator{typeof(softmax)}, x, g) =
 import NNlib
 
 
-function conv(x, kernel; pad=0, flipped=false)
+function conv(x, kernel; pad = 0, flipped = false)
     h, w, c = size(x)
     kh, kw, kc, kb = size(kernel)
 
@@ -154,7 +154,7 @@ conv2d(x::GraphNode, kernel::GraphNode) = BroadcastedOperator(conv2d, x, kernel)
 forward(::BroadcastedOperator{typeof(conv2d)}, x, kernel) =
     let
         input = @view x[:, :, :, 1:1]
-        output = @view conv_op(input, kernel, flipped=true)[:, :, :, 1]
+        output = @view conv_op(input, kernel, flipped = true)[:, :, :, 1]
         return output
     end
 
@@ -164,16 +164,25 @@ backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
         if size(g)[end] != 1
             g = add_dim(g)
         end
- 
-        kernel_gradient = permutedims(conv_op(permutedims(x, (1, 2, 4, 3)), permutedims(g, (1, 2, 4, 3)), flipped=true), (1, 2, 4, 3))
-        input_gradient = conv_op(g, permutedims(kernel, (1, 2, 4, 3)), pad=2, flipped=false)
+
+        kernel_gradient = permutedims(
+            conv_op(
+                permutedims(x, (1, 2, 4, 3)),
+                permutedims(g, (1, 2, 4, 3)),
+                flipped = true,
+            ),
+            (1, 2, 4, 3),
+        )
+        input_gradient =
+            conv_op(g, permutedims(kernel, (1, 2, 4, 3)), pad = 2, flipped = false)
         return tuple(input_gradient, kernel_gradient)
     end
 
 import Base.reshape
 reshape(x::GraphNode, new_size::GraphNode) = BroadcastedOperator(reshape, x, new_size)
 forward(::BroadcastedOperator{typeof(reshape)}, x, new_size) = reshape(x, new_size)
-backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) = tuple(reshape(g, size(x)))
+backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) =
+    tuple(reshape(g, size(x)))
 
 function flatten() end
 flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
@@ -192,9 +201,9 @@ forward(node::BroadcastedOperator{typeof(maxpool2d)}, x) =
         h, w, c = size(x)
         output = zeros(h ÷ 2, w ÷ 2, c)
         indices = CartesianIndex{3}[]
-        for i in 1:c
-            for j in 1:h÷2
-                for k in 1:w÷2
+        for i = 1:c
+            for j = 1:h÷2
+                for k = 1:w÷2
                     val, ids = findmax(@view x[2*j-1:2*j, 2*k-1:2*k, i])
                     output[j, k, i] = val
 
