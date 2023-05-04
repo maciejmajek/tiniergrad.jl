@@ -2,21 +2,24 @@ import Base: *
 import LinearAlgebra: mul!
 using LinearAlgebra
 
+FA = Union{Float64, AbstractArray{Float64}}
+A = AbstractArray{Float64}
+
 Base.Broadcast.broadcasted(+, x::GraphNode, y::GraphNode) = BroadcastedOperator(+, x, y)
-forward(::BroadcastedOperator{typeof(+)}, x, y) = return x .+ y
-backward(::BroadcastedOperator{typeof(+)}, x, y, g) = tuple(g, g)
+forward(::BroadcastedOperator{typeof(+)}, x::Float64, y::Float64) = return x .+ y
+backward(::BroadcastedOperator{typeof(+)}, x::Float64, y::Float64, g::Float64) = tuple(g, g)
 
 Base.Broadcast.broadcasted(-, x::GraphNode, y::GraphNode) = BroadcastedOperator(-, x, y)
-forward(::BroadcastedOperator{typeof(-)}, x, y) = return x .- y
-backward(::BroadcastedOperator{typeof(-)}, x, y, g) = tuple(g, -g)
+forward(::BroadcastedOperator{typeof(-)}, x::Float64, y::Float64) = return x .- y
+backward(::BroadcastedOperator{typeof(-)}, x::Float64, y::Float64, g::Float64) = tuple(g, -g)
 
 *(A::GraphNode, x::GraphNode) = BroadcastedOperator(mul!, A, x)
-forward(::BroadcastedOperator{typeof(mul!)}, A, x) = return A * x
-backward(::BroadcastedOperator{typeof(mul!)}, A, x, g) = tuple(g * x', A' * g)
+forward(::BroadcastedOperator{typeof(mul!)}, AA::A, x::A) = return AA * x
+backward(::BroadcastedOperator{typeof(mul!)}, AA::A, x::A, g::A) = tuple(g * x', AA' * g)
 
 Base.Broadcast.broadcasted(*, x::GraphNode, y::GraphNode) = BroadcastedOperator(*, x, y)
-forward(::BroadcastedOperator{typeof(*)}, x, y) = return x .* y
-backward(node::BroadcastedOperator{typeof(*)}, x, y, g) =
+forward(::BroadcastedOperator{typeof(*)}, x::FA, y) = return x .* y
+backward(node::BroadcastedOperator{typeof(*)}, x::FA, y::FA, g::FA) =
     let
         𝟏 = ones(length(node.output))
         Jx = diagm(y .* 𝟏)
@@ -26,24 +29,24 @@ backward(node::BroadcastedOperator{typeof(*)}, x, y, g) =
 
 import Base: ^
 ^(x::GraphNode, n::GraphNode) = ScalarOperator(^, x, n)
-forward(::ScalarOperator{typeof(^)}, x, n) = return x^n
-backward(::ScalarOperator{typeof(^)}, x, n, g) =
+forward(::ScalarOperator{typeof(^)}, x::FA, n::FA) = return x^n
+backward(::ScalarOperator{typeof(^)}, x::FA, n::FA, g::FA) =
     tuple(g * n * x^(n - 1), g * log(abs(x)) * x^n)
 
 import Base: log
 log(x::GraphNode) = ScalarOperator(log, x)
-forward(::ScalarOperator{typeof(log)}, x) = return log(x)
-backward(::ScalarOperator{typeof(log)}, x, g) = return g / x
+forward(::ScalarOperator{typeof(log)}, x::FA) = return log(x)
+backward(::ScalarOperator{typeof(log)}, x::FA, g::FA) = return g / x
 
 import Base: sum
 sum(x::GraphNode) = BroadcastedOperator(sum, x)
-forward(::BroadcastedOperator{typeof(sum)}, x) = return sum(x)
-backward(::BroadcastedOperator{typeof(sum)}, x, g) = return tuple(ones(size(x)) .* g)
+forward(::BroadcastedOperator{typeof(sum)}, x::FA) = return sum(x)
+backward(::BroadcastedOperator{typeof(sum)}, x::FA, g::FA) = return tuple(ones(size(x)) .* g)
 
 import Base: log
 Base.Broadcast.broadcasted(log, x::GraphNode) = BroadcastedOperator(log, x)
-forward(::BroadcastedOperator{typeof(log)}, x) = return log.(x)
-backward(::BroadcastedOperator{typeof(log)}, x, g) =
+forward(::BroadcastedOperator{typeof(log)}, x::FA) = return log.(x)
+backward(::BroadcastedOperator{typeof(log)}, x::FA, g::FA) =
     let
         𝟏 = ones(length(x))
         J = 𝟏' ./ x
@@ -51,8 +54,8 @@ backward(::BroadcastedOperator{typeof(log)}, x, g) =
     end
 
 Base.Broadcast.broadcasted(/, x::GraphNode, y::GraphNode) = BroadcastedOperator(/, x, y)
-forward(::BroadcastedOperator{typeof(/)}, x, y) = return x ./ y
-backward(node::BroadcastedOperator{typeof(/)}, x, y::Real, g) =
+forward(::BroadcastedOperator{typeof(/)}, x::FA, y::FA) = return x ./ y
+backward(node::BroadcastedOperator{typeof(/)}, x::FA, y::FA, g::FA) =
     let
         𝟏 = ones(length(node.output))
         Jx = diagm(𝟏 ./ y)
@@ -62,8 +65,8 @@ backward(node::BroadcastedOperator{typeof(/)}, x, y::Real, g) =
 
 import Base: max
 Base.Broadcast.broadcasted(max, x::GraphNode, y::GraphNode) = BroadcastedOperator(max, x, y)
-forward(::BroadcastedOperator{typeof(max)}, x, y) = return max.(x, y)
-backward(::BroadcastedOperator{typeof(max)}, x, y, g) =
+forward(::BroadcastedOperator{typeof(max)}, x::FA, y::FA) = return max.(x, y)
+backward(::BroadcastedOperator{typeof(max)}, x::FA, y::FA, g::FA) =
     let
         Jx = diagm(isless.(y, x))
         Jy = diagm(isless.(x, y))
@@ -72,24 +75,24 @@ backward(::BroadcastedOperator{typeof(max)}, x, y, g) =
 
 sigmoid(x::GraphNode) = BroadcastedOperator(sigmoid, x)
 forward(::BroadcastedOperator{typeof(sigmoid)}, x) = 1 ./ (1 .+ exp.(-x))
-backward(node::BroadcastedOperator{typeof(sigmoid)}, x, g) =
+backward(node::BroadcastedOperator{typeof(sigmoid)}, x::A, g::A) =
     tuple(g .* node.output .* (1 .- node.output))
 
 
 relu(x::GraphNode) = BroadcastedOperator(relu, x)
-forward(::BroadcastedOperator{typeof(relu)}, x) = return max.(x, zero(x))
-backward(node::BroadcastedOperator{typeof(relu)}, x, g) = return tuple(g .* (x .> 0))
+forward(::BroadcastedOperator{typeof(relu)}, x::A) = return max.(x, zero(x))
+backward(node::BroadcastedOperator{typeof(relu)}, x::A, g::A) = return tuple(g .* (x .> 0))
 
 cross_entropy_loss(y_hat::GraphNode, y::GraphNode) =
     BroadcastedOperator(cross_entropy_loss, y_hat, y)
-forward(::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y) =
+forward(::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat::A, y::A) =
     let
         y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
         loss = sum(log.(y_hat) .* y) * -1.0
         return loss
     end
-backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y, g) =
+backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat::A, y::A, g::FA) =
     let
         y_hat = y_hat .- maximum(y_hat)
         y_hat = exp.(y_hat) ./ sum(exp.(y_hat))
@@ -97,8 +100,8 @@ backward(node::BroadcastedOperator{typeof(cross_entropy_loss)}, y_hat, y, g) =
     end
 
 Base.Broadcast.broadcasted(^, x::GraphNode, y::GraphNode) = BroadcastedOperator(^, x, y)
-forward(::BroadcastedOperator{typeof(^)}, x, y) = return x .^ y
-backward(::BroadcastedOperator{typeof(^)}, x, y, g) =
+forward(::BroadcastedOperator{typeof(^)}, x::FA, y::FA) = return x .^ y
+backward(::BroadcastedOperator{typeof(^)}, x::FA, y::FA, g::FA) =
     let
         gx = g .* (y .* (x .^ (y .- 1)))
         gy = g .* (x .^ y) .* log.(x)
@@ -106,8 +109,8 @@ backward(::BroadcastedOperator{typeof(^)}, x, y, g) =
     end
 
 softmax(x::GraphNode) = BroadcastedOperator(softmax, x)
-forward(::BroadcastedOperator{typeof(softmax)}, x) = exp.(x) ./ sum(exp.(x))
-backward(node::BroadcastedOperator{typeof(softmax)}, x, g) =
+forward(::BroadcastedOperator{typeof(softmax)}, x::A) = exp.(x) ./ sum(exp.(x))
+backward(node::BroadcastedOperator{typeof(softmax)}, x::A, g::A) =
     let
         y = node.output
         J = diagm(y) .- y * y'
@@ -117,7 +120,7 @@ backward(node::BroadcastedOperator{typeof(softmax)}, x, g) =
 import NNlib
 
 
-function conv(x, kernel; pad = 0, flipped = false)
+function conv(x::A, kernel::A; pad = 0, flipped = false)
     h, w, c = size(x)
     kh, kw, kc, kb = size(kernel)
 
@@ -151,14 +154,14 @@ end
 
 add_dim(x::Array) = reshape(x, (size(x)..., 1))
 conv2d(x::GraphNode, kernel::GraphNode) = BroadcastedOperator(conv2d, x, kernel)
-forward(::BroadcastedOperator{typeof(conv2d)}, x, kernel) =
+forward(::BroadcastedOperator{typeof(conv2d)}, x::A, kernel::A) =
     let
         input = @view x[:, :, :, 1:1]
         output = @view conv_op(input, kernel, flipped = true)[:, :, :, 1]
         return output
     end
 
-backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
+backward(::BroadcastedOperator{typeof(conv2d)}, x::A, kernel::A, g::A) =
     let
         x = add_dim(x)
         if size(g)[end] != 1
@@ -180,23 +183,23 @@ backward(::BroadcastedOperator{typeof(conv2d)}, x, kernel, g) =
 
 import Base.reshape
 reshape(x::GraphNode, new_size::GraphNode) = BroadcastedOperator(reshape, x, new_size)
-forward(::BroadcastedOperator{typeof(reshape)}, x, new_size) = reshape(x, new_size)
-backward(::BroadcastedOperator{typeof(reshape)}, x, new_size, g) =
+forward(::BroadcastedOperator{typeof(reshape)}, x::A, new_size::Tuple{Int64}) = reshape(x, new_size)
+backward(::BroadcastedOperator{typeof(reshape)}, x::A, new_size::Tuple{Int64}, g::A) =
     tuple(reshape(g, size(x)))
 
 function flatten() end
 flatten(x::GraphNode) = BroadcastedOperator(flatten, x)
-forward(::BroadcastedOperator{typeof(flatten)}, x) = reshape(x, length(x))
-backward(::BroadcastedOperator{typeof(flatten)}, x, g) = tuple(reshape(g, size(x)))
+forward(::BroadcastedOperator{typeof(flatten)}, x::A) = reshape(x, length(x))
+backward(::BroadcastedOperator{typeof(flatten)}, x::A, g::A) = tuple(reshape(g, size(x)))
 
 function dense() end
 dense(x::GraphNode, w::GraphNode, b::GraphNode) = BroadcastedOperator(dense, x, w, b)
-forward(::BroadcastedOperator{typeof(dense)}, x, w, b) = w * x .+ b
-backward(::BroadcastedOperator{typeof(dense)}, x, w, b, g) = tuple(w' * g, g * x', g)
+forward(::BroadcastedOperator{typeof(dense)}, x::A, w::A, b::A) = w * x .+ b
+backward(::BroadcastedOperator{typeof(dense)}, x::A, w::A, b::A, g::FA) = tuple(w' * g, g * x', g)
 
 function maxpool2d() end
 maxpool2d(x::GraphNode) = BroadcastedOperator(maxpool2d, x)
-forward(node::BroadcastedOperator{typeof(maxpool2d)}, x) =
+forward(node::BroadcastedOperator{typeof(maxpool2d)}, x::A) =
     let
         h, w, c = size(x)
         output = zeros(h ÷ 2, w ÷ 2, c)
@@ -216,7 +219,7 @@ forward(node::BroadcastedOperator{typeof(maxpool2d)}, x) =
         output
     end
 
-backward(node::BroadcastedOperator{typeof(maxpool2d)}, x, g) =
+backward(node::BroadcastedOperator{typeof(maxpool2d)}, x::A, g::FA) =
     let
         output = zeros(size(x))
         output[node.cache] = vcat(g...)
