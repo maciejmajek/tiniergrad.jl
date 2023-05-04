@@ -222,3 +222,34 @@ backward(node::BroadcastedOperator{typeof(maxpool2d)}, x, g) =
         output[node.cache] = vcat(g...)
         tuple(output)
     end
+
+function avgpool2d() end
+avgpool2d(x::GraphNode) = BroadcastedOperator(avgpool2d, x)
+forward(::BroadcastedOperator{typeof(avgpool2d)}, x) =
+    let
+        h, w, c = size(x)
+        output = zeros(h ÷ 2, w ÷ 2, c)
+        for i = 1:c
+            for j = 1:h÷2
+                for k = 1:w÷2
+                    output[j, k, i] = sum(@view x[2*j-1:2*j, 2*k-1:2*k, i])
+                end
+            end
+        end
+        output .* 0.25
+    end
+
+backward(::BroadcastedOperator{typeof(avgpool2d)}, x, g) =
+    let
+        output = zeros(size(x))
+        upscaled_g = repeat(g, inner=[2,2,1,1])
+        output[1:size(upscaled_g, 1), 1:size(upscaled_g, 2), :] = upscaled_g
+        tuple(output .* 0.25)
+    end
+
+function upscale2d() end
+upscale2d(x::GraphNode) = BroadcastedOperator(upscale2d, x)
+forward(::BroadcastedOperator{typeof(upscale2d)}, x) = repeat(x, inner=[2,2,1])
+backward(::BroadcastedOperator{typeof(upscale2d)}, x, g) = let
+    tuple(g[1:2:end, 1:2:end, :])
+end
