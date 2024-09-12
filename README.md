@@ -1,5 +1,5 @@
 # tiniergrad.jl
-### There are many deep learning fremworks available for you to use. Need a mid sized CNN for binary classification?- Sure. Go for PyTorch. Need a huge gpt4 sized llvm? Again, go for PyTorch. This is clearly the best way! Or is it?
+### There are many deep learning fremworks available for you to use. Need a mid sized CNN for binary classification?- Sure. Go for PyTorch. Need a huge gpt4 sized llm? Again, go for PyTorch. This is clearly the best way! Or is it?
 ![image](/imgs/trends.png)
 # Presenting the smallest grad so far
 ## [karpathy/micrograd](https://github.com/karpathy/micrograd)
